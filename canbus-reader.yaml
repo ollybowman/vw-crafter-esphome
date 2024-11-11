@@ -1,0 +1,210 @@
+esphome:
+  name: canbus-reader
+  friendly_name: Can Bus
+
+external_components:
+  - source: my_components
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable Home Assistant API
+api:
+
+ota:
+  platform: esphome
+
+logger: 
+
+wifi:
+  ssid: "your_ssid"
+  password: "your_password"
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "canbus"
+    password: "your_fallback_password"
+
+captive_portal:
+
+  # Example configuration entry
+web_server:
+  port: 80
+
+# Configure the CAN bus component
+canbus:
+  - platform: esp32_can
+    id: can0
+    rx_pin: GPIO4
+    tx_pin: GPIO5
+    can_id: 0x000
+    bit_rate: 83K3BPS
+    on_frame:
+      - can_id: 0x00A
+        can_id_mask: 536870911
+        use_extended_id: false
+        then:
+          - lambda: |-
+              if (x.size() > 1 && (x[1] & 0x10)) {  // 0x10 is binary 00010000
+                id(light_status) = true;
+                ESP_LOGD("custom", "Lights are ON");
+              } else {
+                id(light_status) = false;
+                ESP_LOGD("custom", "Lights are OFF");
+              }
+
+      - can_id: 0x004
+        can_id_mask: 536870911
+        use_extended_id: false
+        then:
+          - lambda: |-
+              if (x.size() > 0) {
+                if (x[0] & 0x01) {  // Check the least significant bit
+                  id(drivers_door_status) = true;
+                  ESP_LOGD("custom", "Drivers Door is OPEN");
+                } else {
+                  id(drivers_door_status) = false;
+                  ESP_LOGD("custom", "Drivers Door is CLOSED");
+                }
+                if (x[0] & 0x02) {  // Check the second least significant bit
+                  id(passenger_door_status) = true;
+                  ESP_LOGD("custom", "Passenger Door is OPEN");
+                } else {
+                  id(passenger_door_status) = false;
+                  ESP_LOGD("custom", "Passenger Door is CLOSED");
+                }
+                if (x[0] & 0x08) {  // Check the fourth least significant bit
+                  id(side_door_status) = true;
+                  ESP_LOGD("custom", "Side Door is OPEN");
+                } else {
+                  id(side_door_status) = false;
+                  ESP_LOGD("custom", "Side Door is CLOSED");
+                }
+                if (x[0] & 0x10) {  // Check the fifth least significant bit
+                  id(rear_door_status) = true;
+                  ESP_LOGD("custom", "Rear Door is OPEN");
+                } else {
+                  id(rear_door_status) = false;
+                  ESP_LOGD("custom", "Rear Door is CLOSED");
+                }
+                if (x.size() > 0 && (x[2] & 0x40)) {  // Example: Check the least significant bit
+                  id(door_lock_status) = true;
+                  ESP_LOGD("custom", "Doors are UNLOCKED");
+                } else {
+                  id(door_lock_status) = false;
+                  ESP_LOGD("custom", "Doors are LOCKED");
+                }
+              }
+
+globals:
+  - id: light_status
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: drivers_door_status
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: passenger_door_status
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: side_door_status
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: rear_door_status
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: door_lock_status
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+script:
+  - id: unlock_doors
+    then:
+      - lambda: |-
+          ESP_LOGD("custom", "Preparing to send unlock message on CAN ID 0x000");
+      - while:
+          condition:
+            lambda: 'return !id(door_lock_status);'  # Continue until the door is unlocked
+          then:
+            - lambda: |-
+                ESP_LOGD("custom", "Sending unlock message on CAN ID: 0x000");
+            - canbus.send:
+                can_id: 0x000
+                data: [0x00, 0x00, 0x00, 0x50, 0x01, 0x15, 0x10]
+            - delay: 500ms
+
+  - id: lock_doors
+    then:
+      - lambda: |-
+          ESP_LOGD("custom", "Preparing to send lock message on CAN ID 0x000");
+      - while:
+          condition:
+            lambda: 'return id(door_lock_status);'  # Continue until the door is locked
+          then:
+            - lambda: |-
+                ESP_LOGD("custom", "Sending lock message on CAN ID: 0x000");
+            - canbus.send:
+                can_id: 0x000
+                data: [0x00, 0x00, 0x00, 0x00, 0x01, 0x2A, 0x10]
+            - delay: 500ms
+
+binary_sensor:
+  - platform: template
+    name: "Headlights"
+    id: lights_binary_sensor
+    lambda: |-
+      return id(light_status);
+    device_class: light
+
+  - platform: template
+    name: "Drivers Door"
+    id: drivers_door_binary_sensor
+    lambda: |-
+      return id(drivers_door_status);
+    device_class: door
+
+  - platform: template
+    name: "Passenger Door"
+    id: passenger_door_binary_sensor
+    lambda: |-
+      return id(passenger_door_status);
+    device_class: door
+
+  - platform: template
+    name: "Side Door"
+    id: side_door_binary_sensor
+    lambda: |-
+      return id(side_door_status);
+    device_class: door
+
+  - platform: template
+    name: "Rear Door"
+    id: rear_door_binary_sensor
+    lambda: |-
+      return id(rear_door_status);
+    device_class: door
+
+  - platform: template
+    name: "Door Lock"
+    id: door_lock_binary_sensor
+    lambda: |-
+      return id(door_lock_status);
+    device_class: lock
+
+switch:
+  - platform: template
+    name: "Unlock Doors"
+    turn_on_action:
+      - script.execute: unlock_doors
+
+  - platform: template
+    name: "Lock Doors"
+    turn_on_action:
+      - script.execute: lock_doors
