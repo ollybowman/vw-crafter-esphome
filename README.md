@@ -4,9 +4,9 @@ This is the yaml code and custom component to read some canbus information from 
 
 So far it does the following:
 
-Locks and Unlocks Doors
-Shows doors open or closed status
-Shows headlight on or off status
+* Locks and Unlocks Doors
+* Shows doors open or closed status
+* Shows headlight on or off status
 
 The yaml code needs to be compiked to an ESP32 dev board.
 
