@@ -18,4 +18,6 @@ You need to connect the esp32 to the canbus with a 5v canbus transceiver, 3.3v d
 
 Yhe 120ohm resistor needs to be reomved for this to function correctly. Connect the CRX and CTX pins to pins 4 and 5 on the dev board, connect the VCC and GND to the 5v and GND pins on the dev board and connect CANH and CANL to your CANHIGH and CANLOW in the canbus. 
 
-I have LHD crafter and found a CANBUS hub behind the sidepanel in the footwell on the right hand side, whihc was easy to connect into. 
+I have LHD crafter and found a CANBUS hub behind the sidepanel in the footwell on the right hand side, whihc was easy to connect into.
+
+If anyone finds more codes or a better way of doing this please add it.
